@@ -40,11 +40,10 @@ class PekaoParser(BaseParser):
         transactions = []
         lines = text.split("\n")
 
-        # Pekao format: each transaction starts with a date line: DD/MM/YYYY
-        # followed by amount (possibly on same line), then multi-line description
-        DATE_RE = re.compile(r"^(\d{2}/\d{2}/\d{4})\s+([-\d\s,+]+(?:\.\d{2})?)\s*(.*)")
+        # Pekao format: DD/MM/YYYY  AMOUNT  Opis operacji
+        # Amount uses Polish format: dot=thousands separator, comma=decimal, e.g. 3.723,00 or -22,02
+        DATE_RE = re.compile(r"^(\d{2}/\d{2}/\d{4})\s+([-]?[\d][\d .]*, ?\d{2})\s+(.*)")
         DATE_ONLY_RE = re.compile(r"^(\d{2}/\d{2}/\d{4})\s*$")
-        AMOUNT_RE = re.compile(r"^([-+]?[\d\s]+[,.]?\d{2})\s+(.*)")
 
         in_transactions = False
         current: dict | None = None
@@ -57,6 +56,10 @@ class PekaoParser(BaseParser):
                 continue
 
             if not in_transactions:
+                continue
+
+            # Skip column header line that repeats on each page
+            if re.match(r"Data\s+waluty", line_stripped):
                 continue
 
             # Check for date + amount on same line

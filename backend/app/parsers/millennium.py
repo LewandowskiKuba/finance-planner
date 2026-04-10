@@ -122,8 +122,8 @@ class MillenniumParser(BaseParser):
         rest = date_match.group(3)
 
         # Extract amount and balance from end of first line
-        # Amount format: "1.234,56-" or "1.234,56 " (with optional minus at end)
-        amount_match = re.search(r"([\d\s]+,\d{2}[-]?)\s+([\d\s]+,\d{2}[-]?)\s*$", rest)
+        # Amount format: "1.234,56-" or "1.234,56" — dot=thousands, comma=decimal, optional minus at end
+        amount_match = re.search(r"([\d][\d\s.]*,\s?\d{2}-?)\s+([\d][\d\s.]*,\s?\d{2}-?)\s*$", rest)
         if not amount_match:
             return None
 
@@ -140,10 +140,8 @@ class MillenniumParser(BaseParser):
             if re.match(r"Dnia:.*ZAKUP", line):
                 break
             if re.match(r"Kwota transakcji:", line):
-                # Parse original currency if foreign
                 fx_match = re.search(r"Kwota transakcji:\s*([\d.,]+)\s+([A-Z]{3})\s+Kurs walutowy:\s*1\s+[A-Z]{3}\s+=\s+([\d.,]+)\s+PLN", line)
                 if fx_match:
-                    # store for later
                     pass
                 break
             if re.match(r"Z R-ku:|Na R-k:|Nadawca:|Tytułem:|Od:|Do:|ZLECENIODAWCA:|Odbiorca:", line):
@@ -153,9 +151,13 @@ class MillenniumParser(BaseParser):
 
         full_description = " | ".join(p for p in description_parts if p)
 
-        # Parse amount
+        # Parse amount — Polish format: dot=thousands separator, comma=decimal
         is_negative = amount_str.endswith("-")
-        amount_clean = amount_str.rstrip("-").replace(" ", "").replace(",", ".")
+        raw = amount_str.rstrip("-").replace(" ", "")
+        if "," in raw and "." in raw:
+            amount_clean = raw.replace(".", "").replace(",", ".")
+        else:
+            amount_clean = raw.replace(",", ".")
         try:
             amount = float(amount_clean)
         except ValueError:
