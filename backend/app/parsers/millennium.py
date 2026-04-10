@@ -165,6 +165,9 @@ class MillenniumParser(BaseParser):
                 break
             if "Kwotatransakcji:" in line_ns or re.match(r"Kwota transakcji:", line):
                 break
+            # Skip page footers
+            if "bankmillennium.pl" in line_ns or "TeleMillennium" in line_ns or re.match(r"Wyciągnr", line_ns):
+                break
             description_parts.append(line)
 
         full_description = " | ".join(p for p in description_parts if p)
