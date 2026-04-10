@@ -5,20 +5,33 @@ from app.parsers.base import BaseParser, ParsedTransaction
 
 
 TRANSACTION_TYPE_MAP = {
+    "PŁATNOŚĆKARTĄ": "card",
     "PŁATNOŚĆ KARTĄ": "card",
+    "PŁATNOŚĆBLIKWINTERNECIE": "blik",
     "PŁATNOŚĆ BLIK W INTERNECIE": "blik",
+    "PŁATNOŚĆBLIKNATELEFON": "blik",
     "PŁATNOŚĆ BLIK NA TELEFON": "blik",
+    "PRZELEWPRZYCHODZĄCY": "transfer_in",
     "PRZELEW PRZYCHODZĄCY": "transfer_in",
     "PRZEL.NATYCH.PRZYCH.": "transfer_in",
+    "PRZELEWWYCHODZĄCY": "transfer_out",
     "PRZELEW WYCHODZĄCY": "transfer_out",
+    "PRZELEWNANUMERTELEFONU": "transfer_out",
     "PRZELEW NA NUMER TELEFONU": "transfer_out",
+    "PRZELEWPOLEC.ZAPŁ.": "transfer_out",
     "PRZELEW POLEC. ZAPŁ.": "transfer_out",
+    "PRZELEWZLEC.STAŁE": "transfer_out",
     "PRZELEW ZLEC. STAŁE": "transfer_out",
+    "WYPŁATAKARTĄ": "atm",
     "WYPŁATA KARTĄ": "atm",
+    "WYPŁATABLIKZBANKOMATU": "atm",
+    "WYPŁATA BLIK Z BANKOMATU": "atm",
     "PROWIZJA/OPŁATA": "fee",
+    "ZWROTPŁATNOŚCI": "refund",
     "ZWROT PŁATNOŚCI": "refund",
     "SP.RATY": "loan_payment",
     "SPŁ.RATY": "loan_payment",
+    "UZNANIE": "transfer_in",
 }
 
 
@@ -42,17 +55,22 @@ class MillenniumParser(BaseParser):
                 full_text += (page.extract_text() or "") + "\n"
 
             # Extract IBAN
-            iban_match = re.search(r"IBAN:\s*(PL[\d\s]+)", full_text)
+            iban_match = re.search(r"IBAN:?\s*(PL[\d\s]+)", full_text)
             if iban_match:
                 metadata["iban"] = re.sub(r"\s", "", iban_match.group(1))
 
-            # Extract period
-            period_match = re.search(r"za okres od (\d{2}\.\d{2}\.\d{4}) do (\d{2}\.\d{2}\.\d{4})", full_text)
+            # Extract period — handles both spaced and merged formats
+            period_match = re.search(
+                r"zaokresod(\d{2}\.\d{2}\.\d{4})do(\d{2}\.\d{2}\.\d{4})|"
+                r"za okres od (\d{2}\.\d{2}\.\d{4}) do (\d{2}\.\d{2}\.\d{4})",
+                full_text
+            )
             if period_match:
-                metadata["period_start"] = datetime.strptime(period_match.group(1), "%d.%m.%Y").date()
-                metadata["period_end"] = datetime.strptime(period_match.group(2), "%d.%m.%Y").date()
+                d1 = period_match.group(1) or period_match.group(3)
+                d2 = period_match.group(2) or period_match.group(4)
+                metadata["period_start"] = datetime.strptime(d1, "%d.%m.%Y").date()
+                metadata["period_end"] = datetime.strptime(d2, "%d.%m.%Y").date()
 
-            # Parse transactions line by line
             transactions = self._parse_transactions(full_text)
 
         return transactions, metadata
@@ -61,18 +79,16 @@ class MillenniumParser(BaseParser):
         transactions = []
         lines = text.split("\n")
 
-        # Find the section with transactions (after "SALDO POCZĄTKOWE")
         in_transactions = False
         current_tx_lines = []
-
-        DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})\s+(.+?)\s+([\d\s]+,\d{2}[-]?)\s+([\d\s]+,\d{2}[-]?)$")
-        TX_START_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})\s+(.+)")
 
         i = 0
         while i < len(lines):
             line = lines[i].strip()
+            line_ns = line.replace(" ", "")  # no-spaces version for merged-word matching
 
-            if "SALDO POCZĄTKOWE" in line:
+            # Trigger: start of transaction section (pdfplumber merges spaces)
+            if "SALDOPOCZĄTKOWE" in line_ns or "SALDO POCZĄTKOWE" in line:
                 in_transactions = True
                 i += 1
                 continue
@@ -81,26 +97,35 @@ class MillenniumParser(BaseParser):
                 i += 1
                 continue
 
-            # Stop at summary lines
-            if "SUMA UZNAŃ" in line or "UDZIELONE KREDYTY" in line:
-                break
-
-            # Check if line starts a new transaction (two dates at start)
-            m = re.match(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})\s+(.*)", line)
-            if m:
-                # Process previous accumulated transaction
+            # Stop at end-of-account summary lines; reset so next account section can be found
+            if "SUMAUZNAŃ" in line_ns or "SUMA UZNAŃ" in line or "UDZIELONEKREDYTY" in line_ns:
                 if current_tx_lines:
                     tx = self._build_transaction(current_tx_lines)
                     if tx:
                         transactions.append(tx)
+                    current_tx_lines = []
+                in_transactions = False
+                i += 1
+                continue
 
+            # Skip page headers (DATA DATA / KSIEG. WAL. OPISTRANSAKCJI...)
+            if re.match(r"^DATA\s*DATA$", line) or ("OPISTRANSAKCJI" in line_ns and "WARTOŚĆ" in line_ns):
+                i += 1
+                continue
+
+            # Check if line starts a new transaction (two dates at start)
+            m = re.match(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})\s+(.*)", line)
+            if m:
+                if current_tx_lines:
+                    tx = self._build_transaction(current_tx_lines)
+                    if tx:
+                        transactions.append(tx)
                 current_tx_lines = [line]
             elif current_tx_lines and line:
                 current_tx_lines.append(line)
 
             i += 1
 
-        # Don't forget the last one
         if current_tx_lines:
             tx = self._build_transaction(current_tx_lines)
             if tx:
@@ -113,7 +138,6 @@ class MillenniumParser(BaseParser):
             return None
 
         first_line = lines[0]
-        # Extract booking date
         date_match = re.match(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})\s+(.*)", first_line)
         if not date_match:
             return None
@@ -121,8 +145,7 @@ class MillenniumParser(BaseParser):
         booking_date = datetime.strptime(date_match.group(1), "%Y-%m-%d").date()
         rest = date_match.group(3)
 
-        # Extract amount and balance from end of first line
-        # Amount format: "1.234,56-" or "1.234,56" — dot=thousands, comma=decimal, optional minus at end
+        # Amount format: "1.234,56-" or "1.234,56" (dot=thousands, comma=decimal, minus suffix=negative)
         amount_match = re.search(r"([\d][\d\s.]*,\s?\d{2}-?)\s+([\d][\d\s.]*,\s?\d{2}-?)\s*$", rest)
         if not amount_match:
             return None
@@ -130,28 +153,23 @@ class MillenniumParser(BaseParser):
         amount_str = amount_match.group(1).strip()
         desc_text = rest[:amount_match.start()].strip()
 
-        # Combine with continuation lines (skip lines that look like card/metadata)
+        # Collect description from continuation lines
         description_parts = [desc_text]
         for line in lines[1:]:
             line = line.strip()
-            # Skip card number lines, date lines, etc.
-            if re.match(r"Karta:.*Posiadacz:", line):
+            line_ns = line.replace(" ", "")
+            # Stop on card detail lines
+            if "Karta:" in line_ns and "Posiadacz" in line_ns:
                 break
-            if re.match(r"Dnia:.*ZAKUP", line):
+            if "Dnia:" in line_ns and "ZAKUP" in line_ns:
                 break
-            if re.match(r"Kwota transakcji:", line):
-                fx_match = re.search(r"Kwota transakcji:\s*([\d.,]+)\s+([A-Z]{3})\s+Kurs walutowy:\s*1\s+[A-Z]{3}\s+=\s+([\d.,]+)\s+PLN", line)
-                if fx_match:
-                    pass
+            if "Kwotatransakcji:" in line_ns or re.match(r"Kwota transakcji:", line):
                 break
-            if re.match(r"Z R-ku:|Na R-k:|Nadawca:|Tytułem:|Od:|Do:|ZLECENIODAWCA:|Odbiorca:", line):
-                description_parts.append(line)
-                continue
             description_parts.append(line)
 
         full_description = " | ".join(p for p in description_parts if p)
 
-        # Parse amount — Polish format: dot=thousands separator, comma=decimal
+        # Parse amount
         is_negative = amount_str.endswith("-")
         raw = amount_str.rstrip("-").replace(" ", "")
         if "," in raw and "." in raw:
@@ -166,26 +184,11 @@ class MillenniumParser(BaseParser):
         if is_negative:
             amount = -amount
 
-        # Detect original currency from all lines
-        original_amount = None
-        original_currency = None
-        exchange_rate = None
-        for line in lines:
-            fx_match = re.search(
-                r"Kwota transakcji:\s*([\d.,]+)\s+([A-Z]{3})\s+Kurs walutowy:\s*1\s+[A-Z]{3}\s+=\s+([\d.]+)\s+PLN",
-                line
-            )
-            if fx_match:
-                orig_str = fx_match.group(1).replace(",", ".")
-                original_amount = float(orig_str)
-                original_currency = fx_match.group(2)
-                exchange_rate = float(fx_match.group(3))
-                break
-
-        # Detect transaction type
+        # Detect transaction type — match against both spaced and merged forms
+        desc_ns = full_description.replace(" ", "").upper()
         tx_type = "other"
         for keyword, t in TRANSACTION_TYPE_MAP.items():
-            if keyword in full_description.upper() or keyword in desc_text.upper():
+            if keyword.upper() in desc_ns:
                 tx_type = t
                 break
 
@@ -194,8 +197,8 @@ class MillenniumParser(BaseParser):
             description=full_description,
             amount=amount,
             currency="PLN",
-            original_amount=original_amount,
-            original_currency=original_currency,
-            exchange_rate=exchange_rate,
+            original_amount=None,
+            original_currency=None,
+            exchange_rate=None,
             transaction_type=tx_type,
         )
