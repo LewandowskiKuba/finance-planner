@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date
@@ -82,7 +82,13 @@ def list_transactions(
     if search:
         q = q.filter(Transaction.description.ilike(f"%{search}%"))
 
-    transactions = q.order_by(Transaction.date.desc()).offset(offset).limit(limit).all()
+    transactions = (
+        q.options(joinedload(Transaction.account), joinedload(Transaction.category))
+        .order_by(Transaction.date.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     result = []
     for tx in transactions:

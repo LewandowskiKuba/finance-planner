@@ -1,7 +1,8 @@
 import os
 import tempfile
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from datetime import date
 from app.database import get_db
@@ -31,33 +32,70 @@ class StatementResponse(BaseModel):
 
 @router.get("", response_model=list[StatementResponse])
 def list_statements(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    statements = db.query(Statement).order_by(Statement.period_end.desc()).all()
-    result = []
-    for s in statements:
-        count = db.query(Transaction).filter(Transaction.statement_id == s.id).count()
-        result.append(StatementResponse(
+    counts = dict(
+        db.query(Transaction.statement_id, func.count(Transaction.id))
+        .group_by(Transaction.statement_id)
+        .all()
+    )
+    statements = (
+        db.query(Statement)
+        .options(joinedload(Statement.account))
+        .order_by(Statement.period_end.desc())
+        .all()
+    )
+    return [
+        StatementResponse(
             id=s.id,
             account_id=s.account_id,
             account_name=s.account.name,
             period_start=s.period_start,
             period_end=s.period_end,
             filename=s.filename,
-            transaction_count=count,
-        ))
-    return result
+            transaction_count=counts.get(s.id, 0),
+        )
+        for s in statements
+    ]
+
+
+BANK_DISPLAY = {"millennium": "Bank Millennium", "pekao": "Bank Pekao", "other": "Inny bank"}
+
+
+def _resolve_account(db: Session, metadata: dict, current_user_id: int) -> Account:
+    """Find existing account by IBAN or create one automatically."""
+    iban = metadata.get("iban")
+    bank = metadata.get("bank") or "other"
+
+    if iban:
+        account = db.query(Account).filter(Account.iban == iban).first()
+        if account:
+            return account
+
+    # Auto-create account
+    if iban:
+        suffix = iban[-4:]
+        name = f"{BANK_DISPLAY.get(bank, bank)} …{suffix}"
+    else:
+        name = f"{BANK_DISPLAY.get(bank, bank)}"
+
+    account = Account(
+        name=name,
+        bank=bank,
+        account_type="personal",
+        iban=iban or None,
+        created_by=current_user_id,
+    )
+    db.add(account)
+    db.flush()
+    return account
 
 
 @router.post("/upload")
 async def upload_statement(
     file: UploadFile = File(...),
-    account_id: int = Form(...),
+    account_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    account = db.query(Account).filter(Account.id == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
-
     # Save to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         content = await file.read()
@@ -76,13 +114,21 @@ async def upload_statement(
     if not transactions_data:
         raise HTTPException(status_code=422, detail="No transactions found in PDF")
 
+    # Resolve account: explicit id > auto from IBAN/bank in PDF
+    if account_id is not None:
+        account = db.query(Account).filter(Account.id == account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+    else:
+        account = _resolve_account(db, metadata, current_user.id)
+
     # Determine period
     period_start = metadata.get("period_start") or min(t.date for t in transactions_data)
     period_end = metadata.get("period_end") or max(t.date for t in transactions_data)
 
     # Check for duplicate statement
     existing = db.query(Statement).filter(
-        Statement.account_id == account_id,
+        Statement.account_id == account.id,
         Statement.period_start == period_start,
         Statement.period_end == period_end,
     ).first()
@@ -91,7 +137,7 @@ async def upload_statement(
 
     # Create statement
     statement = Statement(
-        account_id=account_id,
+        account_id=account.id,
         period_start=period_start,
         period_end=period_end,
         filename=file.filename,
@@ -125,7 +171,7 @@ async def upload_statement(
 
         tx = Transaction(
             statement_id=statement.id,
-            account_id=account_id,
+            account_id=account.id,
             date=tx_data.date,
             description=tx_data.description,
             amount=float(tx_data.amount),
