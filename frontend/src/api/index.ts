@@ -72,3 +72,6 @@ export const getCategoryTrend = (categoryName: string, months = 12) =>
 
 export const getIncomeVsExpenses = (months = 12) =>
   client.get("/analytics/income-vs-expenses", { params: { months } }).then((r) => r.data);
+
+export const getForecast = (historyMonths = 6, forecastMonths = 3) =>
+  client.get("/analytics/forecast", { params: { history_months: historyMonths, forecast_months: forecastMonths } }).then((r) => r.data);

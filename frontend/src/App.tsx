@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
 import Transactions from "./pages/Transactions";
 import Analytics from "./pages/Analytics";
+import Forecast from "./pages/Forecast";
 import Settings from "./pages/Settings";
 import Layout from "./components/Layout";
 
@@ -27,6 +28,7 @@ export default function App() {
                   <Route path="/upload" element={<Upload />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/forecast" element={<Forecast />} />
                   <Route path="/settings" element={<Settings />} />
                 </Routes>
               </Layout>

@@ -70,3 +70,28 @@ export interface CategoryTotal {
   total: number;
   count: number;
 }
+
+export interface CategoryTrend {
+  category: string;
+  color: string;
+  icon: string;
+  avg_monthly: number;
+  trend_slope: number;
+  trend_pct_per_month: number;
+  r2: number;
+  history: Array<{ month: string; total: number }>;
+  forecast: Array<{ month: string; predicted: number }>;
+}
+
+export interface OverallForecastMonth {
+  month: string;
+  income: number;
+  expenses: number;
+  net: number;
+}
+
+export interface ForecastData {
+  history_months: string[];
+  category_trends: CategoryTrend[];
+  overall_forecast: OverallForecastMonth[];
+}

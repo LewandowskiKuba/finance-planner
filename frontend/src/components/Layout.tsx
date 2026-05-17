@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Upload, List, BarChart2, Settings, LogOut, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Upload, List, BarChart2, Settings, LogOut, TrendingUp, Telescope } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
 const nav = [
@@ -7,6 +7,7 @@ const nav = [
   { to: "/financeplaner/upload", label: "Import PDF", icon: Upload },
   { to: "/financeplaner/transactions", label: "Transakcje", icon: List },
   { to: "/financeplaner/analytics", label: "Analityka", icon: BarChart2 },
+  { to: "/financeplaner/forecast", label: "Prognoza", icon: Telescope },
   { to: "/financeplaner/settings", label: "Ustawienia", icon: Settings },
 ];
 
