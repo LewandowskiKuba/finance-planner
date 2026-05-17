@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
