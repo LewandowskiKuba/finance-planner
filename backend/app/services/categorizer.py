@@ -26,6 +26,7 @@ CATEGORIES = [
     "Przychody - świadczenia",
     "Taniec",
     "Siłownia",
+    "Firma",
     "Inne wydatki",
 ]
 
@@ -55,6 +56,9 @@ Zasady:
 - Allegro, Temu (jeśli nie wiadomo co) → "Inne wydatki"
 - Egurrola, EDS, Modern Art, Agata Chmielewska, 4Dancers → "Taniec"
 - CITYFIT, CityFit, Gorsetyfitness, Kasia Targaszewska → "Siłownia"
+- Coinbaq, Coinbaq Business Solutions → "Firma"
+- Klarna, PayPo → "Kredyt i pożyczka"
+- Santander (rata, kredyt) → "Kredyt i pożyczka"
 
 Odpowiedz TYLKO w JSON: {"results": [{"id": 0, "category": "Nazwa kategorii"}, ...]}"""
 

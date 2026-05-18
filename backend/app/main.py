@@ -55,6 +55,7 @@ def _seed_categories():
             ("Inne wydatki", "#94a3b8", "📦", "expense", 18),
             ("Taniec", "#c026d3", "💃", "expense", 19),
             ("Siłownia", "#0891b2", "🏋️", "expense", 20),
+            ("Firma", "#1d4ed8", "🏢", "expense", 21),
         ]
 
         for name, color, icon, cat_type, order in categories:
