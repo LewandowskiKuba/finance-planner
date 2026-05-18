@@ -131,6 +131,7 @@ def category_totals(
         .join(Category, Transaction.category_id == Category.id)
         .filter(Transaction.is_internal_transfer == False)
         .filter(Transaction.is_income == False)
+        .filter(Category.category_type == "expense")
     )
     if date_from:
         q = q.filter(Transaction.date >= date_from)
