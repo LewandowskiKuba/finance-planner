@@ -66,18 +66,32 @@ export default function Dashboard() {
   const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
   const [incomeVsExp, setIncomeVsExp] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [treemapMonth, setTreemapMonth] = useState<string>("all");
+  const [treemapLoading, setTreemapLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
       getMonthlySummary(12),
-      getCategoryTotals(),
       getIncomeVsExpenses(12),
-    ]).then(([m, c, ive]) => {
+    ]).then(([m, ive]) => {
       setMonthly(m);
-      setCategoryTotals(c);
       setIncomeVsExp(ive);
     }).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (treemapMonth === "all") {
+      setTreemapLoading(true);
+      getCategoryTotals().then(setCategoryTotals).finally(() => setTreemapLoading(false));
+      return;
+    }
+    const [year, month] = treemapMonth.split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    const dateFrom = `${treemapMonth}-01`;
+    const dateTo = `${treemapMonth}-${String(lastDay).padStart(2, "0")}`;
+    setTreemapLoading(true);
+    getCategoryTotals(dateFrom, dateTo).then(setCategoryTotals).finally(() => setTreemapLoading(false));
+  }, [treemapMonth]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen text-slate-400">Ładowanie...</div>;
@@ -178,9 +192,23 @@ export default function Dashboard() {
 
         {/* Treemap — category spend weight */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-1">Struktura wydatków (12 mies.)</h2>
+          <div className="flex items-start justify-between mb-1">
+            <h2 className="text-base font-semibold text-slate-800">Struktura wydatków</h2>
+            <select
+              value={treemapMonth}
+              onChange={(e) => setTreemapMonth(e.target.value)}
+              className="px-2 py-1 border border-slate-300 rounded-lg text-xs focus:outline-none"
+            >
+              <option value="all">Ostatnie 12 mies.</option>
+              {[...monthly].reverse().map((m) => (
+                <option key={m.month} value={m.month}>{formatMonth(m.month)}</option>
+              ))}
+            </select>
+          </div>
           <p className="text-xs text-slate-400 mb-3">Rozmiar prostokąta = udział w łącznych wydatkach</p>
-          {treemapData.length === 0 ? (
+          {treemapLoading ? (
+            <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Ładowanie...</div>
+          ) : treemapData.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Brak danych</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
