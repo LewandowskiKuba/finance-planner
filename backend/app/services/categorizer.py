@@ -54,7 +54,7 @@ Zasady:
 - Odzież: Primark, H&M, Zara, TK Maxx, Castello → "Odzież i obuwie"
 - Allegro, Temu (jeśli nie wiadomo co) → "Inne wydatki"
 - Egurrola, EDS, Modern Art, Agata Chmielewska, 4Dancers → "Taniec"
-- CITIFIT, Kasia Targaszewska → "Siłownia"
+- CITYFIT, CityFit, Gorsetyfitness, Kasia Targaszewska → "Siłownia"
 
 Odpowiedz TYLKO w JSON: {"results": [{"id": 0, "category": "Nazwa kategorii"}, ...]}"""
 
