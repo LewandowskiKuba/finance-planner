@@ -53,6 +53,8 @@ def _seed_categories():
             ("Przychody - usługi", "#16a34a", "💼", "income", 16),
             ("Przychody - świadczenia", "#15803d", "🏛️", "income", 17),
             ("Inne wydatki", "#94a3b8", "📦", "expense", 18),
+            ("Taniec", "#c026d3", "💃", "expense", 19),
+            ("Siłownia", "#0891b2", "🏋️", "expense", 20),
         ]
 
         for name, color, icon, cat_type, order in categories:
